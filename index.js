@@ -8,21 +8,20 @@ var options = {
 };
 
 // Imports
-var path = require('path'),
-    fs = require('fs'),
-    express = require('express'),
-    app = express(),
-    http = require('http'),
-    https = require('https'),
-    server = http.Server(app),
-    bodyParser = require('body-parser'),
-    najax = require('najax'),
-    FormData = require('form-data'),
-    url = require('url'),
-    path = require('path');
+var path = require('path');
+var fs = require('fs');
+var express = require('express');
+var app = express();
+var http = require('http');
+var https = require('https');
+var server = http.Server(app);
+var bodyParser = require('body-parser');
+var najax = require('najax');
+var FormData = require('form-data');
+var url = require('url');
 
 // Run Server
-var server = server.listen(options.port, function () {
+server.listen(options.port, function () {
     console.log('listening on *:' + options.port);
 });
 
@@ -33,7 +32,7 @@ app.use('/public', express.static('public'));
 var jsonParser = bodyParser.json();
 
 app.get('/', function (req, res) {
-    res.sendFile(__dirname + '/index.html');
+    res.sendFile(path.join(__dirname, '/index.html'));
 });
 
 // POST /api/users gets JSON bodies
@@ -77,15 +76,15 @@ function getBuildDetails (buildAPIURL) {
             'Authorization': 'Basic ' + options.unityCloudAPIKey
         },
         success: function (data) {
-            var data = JSON.parse(data);
+            var parsedData = JSON.parse(data);
 
-            var parsed = url.parse(data.links.download_primary.href);
-            var filename = '/tmp/' + path.basename(parsed.pathname);
+            var parsedUrl = url.parse(parsedData.links.download_primary.href);
+            var filename = '/tmp/' + path.basename(parsedUrl.pathname);
 
             console.log('1. getBuildDetails: finished');
 
             // 3. Download binary.
-            downloadBinary(data.links.download_primary.href, filename);
+            downloadBinary(parsedData.links.download_primary.href, filename);
         },
         error: function (error) {
             console.log(error);
@@ -174,15 +173,11 @@ function uploadToHockeyApp (filename) {
         if (res.statusCode !== 200 && res.statusCode !== 201) {
             console.log('Uploading failed with status ' + res.statusCode);
             console.log(res);
-            // res.on('data', function (chunk) {
-            //   console.log(chunk);
-            //             // res.on('end', function () {
-            //   console.log('end');
-            // });
+
             return;
         }
 
-        var jsonString = '';
+        var jsonString = ''; // eslint-disable-line
         res.on('data', (chunk) => {
             jsonString += String.fromCharCode.apply(null, new Uint16Array(chunk));
         });
@@ -209,8 +204,8 @@ function uploadToHockeyApp (filename) {
 
 // Delete file, used to clear up any binary downloaded.
 function deleteFile (filename) {
-    fs.exists(filename, function (exists) {
-        if (exists) {
+    fs.access(filename, function (err) {
+        if (!err || err.code !== 'ENOENT') {
             // Delete File.
             fs.unlink(filename, (err) => {
                 if (err) {
