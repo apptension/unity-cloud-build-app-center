@@ -5,7 +5,8 @@ var options = {
     unityCloudAPIKey: process.env.UNITYCLOUD_KEY,
     unityCloudSecret: process.env.UNITYCLOUD_SECRET,
     hockeyappAPIUpload: 'https://rink.hockeyapp.net/api/2/apps/upload',
-    hockeyappAPIKey: process.env.HOCKEYAPP_KEY
+    hockeyappAPIKey: process.env.HOCKEYAPP_KEY,
+    logLevel: process.env.LOG_LEVEL || 0
 };
 
 // Imports
@@ -136,7 +137,9 @@ function downloadBinary (binaryURL, filename) {
             cur += chunk.length;
             writeStream.write(chunk, 'binary');
 
-            console.log('Downloading ' + (100.0 * cur / len).toFixed(2) + '%, Downloaded: ' + (cur / 1048576).toFixed(2) + ' mb, Total: ' + total.toFixed(2) + ' mb');
+            if (options.logLevel >= 1) {
+                console.log('Downloading ' + (100.0 * cur / len).toFixed(2) + '%, Downloaded: ' + (cur / 1048576).toFixed(2) + ' mb, Total: ' + total.toFixed(2) + ' mb');
+            }
         });
 
         res.on('end', () => {
@@ -202,8 +205,6 @@ function uploadToHockeyApp (filename) {
         res.on('end', () => {
             console.log('3. uploadToHockeyApp: finished');
 
-            // console.log(jsonString);
-
             deleteFile(filename);
         });
     });
@@ -215,7 +216,9 @@ function uploadToHockeyApp (filename) {
 
     req.on('data', (chunk) => {
         cur += chunk.length;
-        console.log('Downloading ' + (100.0 * cur / len).toFixed(2) + '%, Downloaded: ' + (cur / 1048576).toFixed(2) + ' mb, Total: ' + total.toFixed(2) + ' mb');
+        if (options.logLevel >= 1) {
+            console.log('Downloading ' + (100.0 * cur / len).toFixed(2) + '%, Downloaded: ' + (cur / 1048576).toFixed(2) + ' mb, Total: ' + total.toFixed(2) + ' mb');
+        }
     });
 }
 
