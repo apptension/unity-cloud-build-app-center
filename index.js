@@ -3,6 +3,7 @@ var options = {
     port: process.env.PORT || 80, // Heroku port or 80.
     unityAPIBase: 'https://build-api.cloud.unity3d.com', // URI (e.g. href) recieved in web hook payload.
     unityCloudAPIKey: process.env.UNITYCLOUD_KEY,
+    unityCloudSecret: process.env.UNITYCLOUD_SECRET,
     hockeyappAPIUpload: 'https://rink.hockeyapp.net/api/2/apps/upload',
     hockeyappAPIKey: process.env.HOCKEYAPP_KEY
 };
@@ -19,6 +20,7 @@ var bodyParser = require('body-parser');
 var najax = require('najax');
 var FormData = require('form-data');
 var url = require('url');
+var HmacSHA256 = require('crypto-js/hmac-sha256');
 
 // Run Server
 server.listen(options.port, function () {
@@ -29,7 +31,22 @@ server.listen(options.port, function () {
 app.use('/public', express.static('public'));
 
 // parse application/json
-var jsonParser = bodyParser.json();
+var jsonParser = bodyParser.json({
+    verify: function (req, res, buf, encoding) {
+        if (options.unityCloudSecret) {
+            var content = buf.toString();
+            var actualHmac = HmacSHA256(content, options.unityCloudSecret).toString();
+
+            var hmac = req.headers['x-unitycloudbuild-signature'];
+
+            if (hmac !== actualHmac) {
+                throw new Error('Invalid signature');
+            } else {
+                console.log('Singature OK');
+            }
+        }
+    }
+});
 
 app.get('/', function (req, res) {
     res.sendFile(path.join(__dirname, '/index.html'));
