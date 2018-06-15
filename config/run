@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eux
+
+exec chpst -u app   \
+     node /app/index.js
