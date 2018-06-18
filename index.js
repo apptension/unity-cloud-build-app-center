@@ -43,7 +43,7 @@ var jsonParser = bodyParser.json({
             if (hmac !== actualHmac) {
                 throw new Error('Invalid signature');
             } else {
-                console.log('Singature OK');
+                console.log('Signature OK');
             }
         }
     }
