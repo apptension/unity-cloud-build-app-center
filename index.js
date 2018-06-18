@@ -81,10 +81,10 @@ app.post('/build', jsonParser, function (req, res) {
     }
 
     // 2. Grab binary URL from Unity Cloud API
-    getBuildDetails(buildAPIURL);
+    getBuildDetails(buildAPIURL, req.query.teams);
 });
 
-function getBuildDetails (buildAPIURL) {
+function getBuildDetails (buildAPIURL, teams) {
     console.log('1. getBuildDetails: start');
 
     najax({
@@ -102,7 +102,7 @@ function getBuildDetails (buildAPIURL) {
             console.log('1. getBuildDetails: finished');
 
             // 3. Download binary.
-            downloadBinary(parsedData.links.download_primary.href, filename);
+            downloadBinary(parsedData.links.download_primary.href, filename, teams);
         },
         error: function (error) {
             console.log(error);
@@ -116,7 +116,7 @@ function getBuildDetails (buildAPIURL) {
     });
 }
 
-function downloadBinary (binaryURL, filename) {
+function downloadBinary (binaryURL, filename, teams) {
     console.log('2. downloadBinary: start');
     console.log('   ' + binaryURL);
     console.log('   ' + filename);
@@ -148,14 +148,14 @@ function downloadBinary (binaryURL, filename) {
         });
 
         writeStream.on('finish', () => {
-            uploadToHockeyApp(filename);
+            uploadToHockeyApp(filename, teams);
         });
     }).on('error', (e) => {
         console.error(e);
     });
 }
 
-function uploadToHockeyApp (filename) {
+function uploadToHockeyApp (filename, teams) {
     console.log('3. uploadToHockeyApp: start');
 
     var readable = fs.createReadStream(filename);
@@ -176,6 +176,10 @@ function uploadToHockeyApp (filename) {
     form.append('notes_type', 0);
     form.append('notify', 0);
     form.append('ipa', readable);
+
+    if (teams) {
+        form.append('teams', teams);
+    }
 
     var req = form.submit({
         host: HOCKEY_APP_HOST,
