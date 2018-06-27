@@ -7,7 +7,7 @@ var options = {
     hockeyAppHost: 'rink.hockeyapp.net',
     hockeyAppProtocol: 'https:',
     hockeyappAPIKey: process.env.HOCKEYAPP_KEY,
-    logLevel: process.env.LOG_LEVEL || 0
+    logLevel: process.env.LOG_LEVEL || 'info'
 };
 
 // Imports
@@ -23,10 +23,27 @@ var najax = require('najax');
 var FormData = require('form-data');
 var url = require('url');
 var HmacSHA256 = require('crypto-js/hmac-sha256');
+var winston = require('winston');
+
+// Setup logging
+const logger = winston.createLogger({
+    level: options.logLevel,
+    format: winston.format.json(),
+    transports: [
+        new winston.transports.Console({
+            format: winston.format.combine(
+                winston.format.timestamp(),
+                winston.format.align(),
+                winston.format.splat(),
+                winston.format.printf(info => `${info.timestamp} ${info.level}: ${info.message}`)
+            )
+        })
+    ]
+});
 
 // Run Server
 server.listen(options.port, function () {
-    console.log('listening on *:' + options.port);
+    logger.info('listening on *:' + options.port);
 });
 
 // Configure Express
@@ -44,7 +61,7 @@ var jsonParser = bodyParser.json({
             if (hmac !== actualHmac) {
                 throw new Error('Invalid signature');
             } else {
-                console.log('Signature OK');
+                logger.info('Signature OK');
             }
         }
     }
@@ -59,7 +76,7 @@ app.post('/build', jsonParser, function (req, res) {
         return res.sendStatus(400);
     }
 
-    console.log(req.body);
+    logger.info('body: %j', req.body);
 
     // Get Build API URL
     var buildAPIURL = req.body.links.api_self.href;
@@ -85,7 +102,7 @@ app.post('/build', jsonParser, function (req, res) {
 });
 
 function getBuildDetails (buildAPIURL) {
-    console.log('getBuildDetails: start');
+    logger.info('getBuildDetails: start');
 
     return new Promise((resolve, reject) =>
         najax({
@@ -100,12 +117,12 @@ function getBuildDetails (buildAPIURL) {
                 var parsedUrl = url.parse(parsedData.links.download_primary.href);
                 var filename = '/tmp/' + path.basename(parsedUrl.pathname);
 
-                console.log('getBuildDetails: finished');
+                logger.info('getBuildDetails: finished');
 
                 resolve({url: parsedData.links.download_primary.href, filename: filename});
             },
             error: function (error) {
-                console.log(error);
+                logger.error('Error when fetching build details: %j', error);
                 reject(error);
             }
         })
@@ -113,15 +130,15 @@ function getBuildDetails (buildAPIURL) {
 }
 
 function downloadBinary (binaryURL, filename) {
-    console.log('downloadBinary: start');
-    console.log('   ' + binaryURL);
-    console.log('   ' + filename);
+    logger.info('downloadBinary: start');
+    logger.info('   ' + binaryURL);
+    logger.info('   ' + filename);
 
     return new Promise((resolve, reject) =>
         deleteFile(filename, () =>
             https.get(binaryURL, (res) => {
-                console.log('statusCode: ', res.statusCode);
-                console.log('headers: ', res.headers);
+                logger.info('statusCode: %j', res.statusCode);
+                logger.info('headers: %j', res.headers);
 
                 var writeStream = fs.createWriteStream(filename, {'flags': 'a'});
 
@@ -133,13 +150,11 @@ function downloadBinary (binaryURL, filename) {
                     cur += chunk.length;
                     writeStream.write(chunk, 'binary');
 
-                    if (options.logLevel >= 1) {
-                        console.log('Downloading ' + (100.0 * cur / len).toFixed(2) + '%, Downloaded: ' + (cur / 1048576).toFixed(2) + ' mb, Total: ' + total.toFixed(2) + ' mb');
-                    }
+                    logger.debug('Downloading ' + (100.0 * cur / len).toFixed(2) + '%, Downloaded: ' + (cur / 1048576).toFixed(2) + ' mb, Total: ' + total.toFixed(2) + ' mb');
                 });
 
                 res.on('end', () => {
-                    console.log('downloadBinary: finished');
+                    logger.info('downloadBinary: finished');
                     writeStream.end();
                 });
 
@@ -165,7 +180,7 @@ function uploadToHockeyApp (filename, platform, appId, teams) {
 }
 
 function getHockeyAppVersion (appId) {
-    console.log('getHockeyAppVersion: start');
+    logger.info('getHockeyAppVersion: start');
     var url = options.hockeyAppProtocol + '//' + options.hockeyAppHost + '/api/2/apps/' + appId + '/app_versions';
 
     return new Promise((resolve, reject) =>
@@ -183,11 +198,11 @@ function getHockeyAppVersion (appId) {
                     version = parseInt(parsedData.app_versions[0].version);
                 }
 
-                console.log('getHockeyAppVersion: finished');
+                logger.info('getHockeyAppVersion: finished');
                 resolve(version);
             },
             error: function (error) {
-                console.log(error);
+                logger.error('Error when fetching version data: %j', error);
                 reject(error);
             }
         })
@@ -195,7 +210,7 @@ function getHockeyAppVersion (appId) {
 }
 
 function createHockeyAppVersion (appId, version) {
-    console.log('createHockeyAppVersion: start');
+    logger.info('createHockeyAppVersion: start');
     // HockeyApp properties
     var HOCKEY_APP_PATH = '/api/2/apps/' + appId + '/app_versions/new';
 
@@ -214,7 +229,7 @@ function createHockeyAppVersion (appId, version) {
             }
         }, function (err, res) {
             if (err) {
-                console.log(err);
+                logger.error('Error when creating version: %j', err);
                 reject(err);
             }
 
@@ -224,7 +239,7 @@ function createHockeyAppVersion (appId, version) {
 
             res.on('end', () => {
                 var parsedData = JSON.parse(body);
-                console.log('createHockeyAppVersion: finished');
+                logger.info('createHockeyAppVersion: finished');
                 resolve(parsedData.id);
             });
         })
@@ -232,11 +247,11 @@ function createHockeyAppVersion (appId, version) {
 }
 
 function updateHockeyAppVersion (appId, versionId, filename, teams) {
-    console.log('updateHockeyAppVersion: start');
+    logger.info('updateHockeyAppVersion: start');
 
     var readable = fs.createReadStream(filename);
     readable.on('error', () => {
-        console.log('Error reading binary file for upload to HockeyApp');
+        logger.info('Error reading binary file for upload to HockeyApp');
     });
 
     // HockeyApp properties
@@ -263,13 +278,13 @@ function updateHockeyAppVersion (appId, versionId, filename, teams) {
             }
         }, function (err, res) {
             if (err) {
-                console.log(err);
+                logger.error('Error when uploading: %j', err);
                 reject(err);
             }
 
             if (res.statusCode !== 200 && res.statusCode !== 201) {
-                console.log('Uploading failed with status ' + res.statusCode);
-                console.log(res);
+                logger.error('Uploading failed with status ' + res.statusCode);
+                logger.error('res: %j', res);
                 reject(err);
             }
 
@@ -279,7 +294,7 @@ function updateHockeyAppVersion (appId, versionId, filename, teams) {
             });
 
             res.on('end', () => {
-                console.log('updateHockeyAppVersion: finished');
+                logger.info('updateHockeyAppVersion: finished');
                 deleteFile(filename, resolve);
             });
         })
@@ -287,11 +302,11 @@ function updateHockeyAppVersion (appId, versionId, filename, teams) {
 }
 
 function uploadFileToHockeyApp (filename, teams) {
-    console.log('uploadToHockeyApp: start');
+    logger.info('uploadToHockeyApp: start');
 
     var readable = fs.createReadStream(filename);
     readable.on('error', () => {
-        console.log('Error reading binary file for upload to HockeyApp');
+        logger.error('Error reading binary file for upload to HockeyApp');
     });
 
     // HockeyApp properties
@@ -321,12 +336,12 @@ function uploadFileToHockeyApp (filename, teams) {
             }
         }, function (err, res) {
             if (err) {
-                console.log(err);
+                logger.error('Error when uploading: %j', err);
                 reject(err);
             }
 
             if (res.statusCode !== 200 && res.statusCode !== 201) {
-                console.log('Uploading failed with status ' + res.statusCode);
+                logger.info('Uploading failed with status ' + res.statusCode);
                 reject(err);
             }
 
@@ -336,7 +351,7 @@ function uploadFileToHockeyApp (filename, teams) {
             });
 
             res.on('end', () => {
-                console.log('uploadToHockeyApp: finished');
+                logger.info('uploadToHockeyApp: finished');
 
                 deleteFile(filename, resolve);
             });
@@ -349,9 +364,7 @@ function uploadFileToHockeyApp (filename, teams) {
 
         req.on('data', (chunk) => {
             cur += chunk.length;
-            if (options.logLevel >= 1) {
-                console.log('Downloading ' + (100.0 * cur / len).toFixed(2) + '%, Downloaded: ' + (cur / 1048576).toFixed(2) + ' mb, Total: ' + total.toFixed(2) + ' mb');
-            }
+            logger.debug('Downloading ' + (100.0 * cur / len).toFixed(2) + '%, Downloaded: ' + (cur / 1048576).toFixed(2) + ' mb, Total: ' + total.toFixed(2) + ' mb');
         });
     });
 }
@@ -363,7 +376,7 @@ function deleteFile (filename, cb) {
             // Delete File.
             fs.unlink(filename, (err) => {
                 if (err) {
-                    console.log(err);
+                    logger.error('Error when deleting file: %j', err);
                 }
 
                 cb();
