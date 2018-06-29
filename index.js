@@ -88,7 +88,7 @@ app.post('/build', jsonParser, async function (req, res) {
             message: 'No build link from Unity Cloud Build webhook'
         });
 
-        logger.warn('No build link provided, ignoring request')
+        logger.warn('No build link provided, ignoring request');
 
         return;
     } else {
