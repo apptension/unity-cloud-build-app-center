@@ -79,7 +79,7 @@ app.post('/build', jsonParser, async function (req, res) {
     logger.info('body: %j', req.body);
 
     // Get Build API URL
-    var buildAPIURL = req.body.links.api_self.href;
+    var buildAPIURL = ((req.body.links || {}).api_self || {}).href;
     if (!buildAPIURL) {
         // URL not available.
         res.setHeader('Content-Type', 'application/json');
@@ -87,6 +87,10 @@ app.post('/build', jsonParser, async function (req, res) {
             error: true,
             message: 'No build link from Unity Cloud Build webhook'
         });
+
+        logger.warn('No build link provided, ignoring request')
+
+        return;
     } else {
         // URL available.
         res.setHeader('Content-Type', 'application/json');
