@@ -96,6 +96,14 @@ app.post('/build', jsonParser, function (req, res) {
         });
     }
 
+    if (req.query.excludeTargets) {
+        var excludedTargets = req.query.excludeTargets.split(',').map((x) => x.trim());
+        if (excludedTargets.includes(req.body.buildTargetName)) {
+            logger.info('Target "%s" excluded, skipping', req.body.buildTargetName);
+            return;
+        }
+    }
+
     getBuildDetails(buildAPIURL)
         .then(({ url, filename }) => downloadBinary(url, filename))
         .then((filename) => uploadToHockeyApp(filename, req.body.platform, req.query.appId, req.query.teams));
