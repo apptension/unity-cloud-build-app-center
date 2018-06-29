@@ -71,7 +71,7 @@ app.get('/', function (req, res) {
     res.sendFile(path.join(__dirname, '/index.html'));
 });
 
-app.post('/build', jsonParser, function (req, res) {
+app.post('/build', jsonParser, async function (req, res) {
     if (!req.body) {
         return res.sendStatus(400);
     }
@@ -104,9 +104,9 @@ app.post('/build', jsonParser, function (req, res) {
         }
     }
 
-    getBuildDetails(buildAPIURL)
-        .then(({ url, filename }) => downloadBinary(url, filename))
-        .then((filename) => uploadToHockeyApp(filename, req.body.platform, req.query.appId, req.query.teams));
+    var { url, filename, notes } = await getBuildDetails(buildAPIURL);
+    var downloadedFilename = await downloadBinary(url, filename);
+    await uploadToHockeyApp(downloadedFilename, notes, req.body.platform, req.query.appId, req.query.teams);
 });
 
 function getBuildDetails (buildAPIURL) {
@@ -122,12 +122,22 @@ function getBuildDetails (buildAPIURL) {
             success: function (data) {
                 var parsedData = JSON.parse(data);
 
+                var notes = '';
+
+                if (parsedData.changeset) {
+                    notes += 'Commits:\n';
+
+                    for (var commit of parsedData.changeset.reverse()) {
+                        notes += `  - [${commit.commitId.substr(0, 8)}] ${commit.message}\n`;
+                    }
+                }
+
                 var parsedUrl = url.parse(parsedData.links.download_primary.href);
                 var filename = '/tmp/' + path.basename(parsedUrl.pathname);
 
                 logger.info('getBuildDetails: finished');
 
-                resolve({url: parsedData.links.download_primary.href, filename: filename});
+                resolve({url: parsedData.links.download_primary.href, filename: filename, notes: notes});
             },
             error: function (error) {
                 logger.error('Error when fetching build details: %j', error);
@@ -177,13 +187,13 @@ function downloadBinary (binaryURL, filename) {
     );
 }
 
-function uploadToHockeyApp (filename, platform, appId, teams) {
+async function uploadToHockeyApp (filename, notes, platform, appId, teams) {
     if (platform === 'android' || platform === 'ios') {
-        return uploadFileToHockeyApp(filename, teams);
+        return uploadFileToHockeyApp(filename, notes, teams);
     } else {
-        return getHockeyAppVersion(appId)
-            .then((version) => createHockeyAppVersion(appId, version + 1))
-            .then((versionId) => updateHockeyAppVersion(appId, versionId, filename, teams));
+        var version = await getHockeyAppVersion(appId);
+        var versionId = await createHockeyAppVersion(appId, version + 1);
+        return updateHockeyAppVersion(appId, versionId, filename, notes, teams);
     }
 }
 
@@ -254,7 +264,7 @@ function createHockeyAppVersion (appId, version) {
     );
 }
 
-function updateHockeyAppVersion (appId, versionId, filename, teams) {
+function updateHockeyAppVersion (appId, versionId, filename, notes, teams) {
     logger.info('updateHockeyAppVersion: start');
 
     var readable = fs.createReadStream(filename);
@@ -267,6 +277,8 @@ function updateHockeyAppVersion (appId, versionId, filename, teams) {
 
     // Create FormData
     var form = new FormData();
+    form.append('notes', notes);
+    form.append('notes_type', 0);
     form.append('status', 2);
     form.append('ipa', readable);
 
@@ -309,7 +321,7 @@ function updateHockeyAppVersion (appId, versionId, filename, teams) {
     );
 }
 
-function uploadFileToHockeyApp (filename, teams) {
+function uploadFileToHockeyApp (filename, notes, teams) {
     logger.info('uploadToHockeyApp: start');
 
     var readable = fs.createReadStream(filename);
@@ -323,10 +335,8 @@ function uploadFileToHockeyApp (filename, teams) {
     // Create FormData
     var form = new FormData();
     form.append('status', 2);
-    // form.append('mandatory', MANDATORY_TYPE[options.mandatory]);
-    form.append('notes', 'Automated release triggered from Unity Cloud Build.');
+    form.append('notes', notes);
     form.append('notes_type', 0);
-    form.append('notify', 0);
     form.append('ipa', readable);
 
     if (teams) {
