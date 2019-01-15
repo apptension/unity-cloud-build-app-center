@@ -1,7 +1,7 @@
 {
-  "name": "unity-cloud-build-to-hockeyapp",
+  "name": "unity-cloud-build-to-app-center",
   "version": "1.0.0",
-  "description": "Receives a payload from Unity Cloud Build webhook. Downloads the binary and posts to the HockeyApp API. Automating deployment from Unity Cloud Build to Hockeyapp.",
+  "description": "Receives a payload from Unity Cloud Build webhook. Downloads the binary and posts to the App Center API. Automating deployment from Unity Cloud Build to App Center.",
   "main": "index.js",
   "dependencies": {
     "crypto-js": "^3.1.9-1",

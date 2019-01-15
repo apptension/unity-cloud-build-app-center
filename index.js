@@ -4,9 +4,8 @@ var options = {
     unityAPIBase: 'https://build-api.cloud.unity3d.com', // URI (e.g. href) recieved in web hook payload.
     unityCloudAPIKey: process.env.UNITYCLOUD_KEY,
     unityCloudSecret: process.env.UNITYCLOUD_SECRET,
-    hockeyAppHost: 'rink.hockeyapp.net',
-    hockeyAppProtocol: 'https:',
-    hockeyappAPIKey: process.env.HOCKEYAPP_KEY,
+    appCenterHost: 'https://api.appcenter.ms',
+    appCenterAPIKey: process.env.APPCENTER_KEY,
     logLevel: process.env.LOG_LEVEL || 'info'
 };
 
@@ -110,7 +109,7 @@ app.post('/build', jsonParser, async function (req, res) {
 
     var { url, filename, notes } = await getBuildDetails(buildAPIURL);
     var downloadedFilename = await downloadBinary(url, filename);
-    await uploadToHockeyApp(downloadedFilename, notes, req.body.platform, req.query.appId, req.query.teams);
+    await uploadToAppCenter(downloadedFilename, notes, req.body.platform, req.query.ownerName, req.query.appName, req.query.team);
 });
 
 function getBuildDetails (buildAPIURL) {
@@ -191,170 +190,126 @@ function downloadBinary (binaryURL, filename) {
     );
 }
 
-async function uploadToHockeyApp (filename, notes, platform, appId, teams) {
+async function uploadToAppCenter (filename, notes, platform, ownerName, appName, team) {
     if (platform === 'android' || platform === 'ios') {
-        return uploadFileToHockeyApp(filename, notes, teams);
+        var { uploadId, uploadUrl } = await createAppCenterUpload(ownerName, appName);
+        await uploadFileToAppCenter(filename, uploadUrl);
+        var releaseUrl = await commitAppCenterUpload(ownerName, appName, uploadId);
+        await distributeAppCenterUpload(releaseUrl, team, notes);
     } else {
-        var version = await getHockeyAppVersion(appId);
-        var versionId = await createHockeyAppVersion(appId, version + 1);
-        return updateHockeyAppVersion(appId, versionId, filename, notes, teams);
+        logger.error('Platform not supported: %s', platform);
     }
 }
 
-function getHockeyAppVersion (appId) {
-    logger.info('getHockeyAppVersion: start');
-    var url = options.hockeyAppProtocol + '//' + options.hockeyAppHost + '/api/2/apps/' + appId + '/app_versions';
+function createAppCenterUpload (ownerName, appName) {
+    logger.info('createAppCenterUpload: start');
+    var url = `${options.appCenterHost}/v0.1/apps/${ownerName}/${appName}/release_uploads`;
 
     return new Promise((resolve, reject) =>
         najax({
             url: url,
-            type: 'GET',
+            method: 'POST',
             headers: {
-                'X-HockeyAppToken': options.hockeyappAPIKey
+                'X-API-Token': options.appCenterAPIKey,
+                'Content-Type': 'application/json'
             },
             success: function (data) {
                 var parsedData = JSON.parse(data);
 
-                var version = 0;
-                if (parsedData.app_versions.length > 0) {
-                    version = parseInt(parsedData.app_versions[0].version);
-                }
-
-                logger.info('getHockeyAppVersion: finished');
-                resolve(version);
+                logger.info('createAppCenterUpload: finished');
+                resolve({
+                    uploadId: parsedData.upload_id,
+                    uploadUrl: parsedData.upload_url
+                });
             },
             error: function (error) {
-                logger.error('Error when fetching version data: %j', error);
+                logger.error('Error when creating upload: %j', error);
                 reject(error);
             }
         })
     );
 }
 
-function createHockeyAppVersion (appId, version) {
-    logger.info('createHockeyAppVersion: start');
-    // HockeyApp properties
-    var HOCKEY_APP_PATH = '/api/2/apps/' + appId + '/app_versions/new';
-
-    // Create FormData
-    var form = new FormData();
-    form.append('bundle_version', version);
+function commitAppCenterUpload (ownerName, appName, uploadId) {
+    logger.info('commitAppCenterUpload: start');
+    var url = `${options.appCenterHost}/v0.1/apps/${ownerName}/${appName}/release_uploads/${uploadId}`;
 
     return new Promise((resolve, reject) =>
-        form.submit({
-            host: options.hockeyAppHost,
-            path: HOCKEY_APP_PATH,
-            protocol: options.hockeyAppProtocol,
+        najax({
+            url: url,
+            type: 'PATCH',
+            content_type: 'application/json',
+            data: { status: 'committed' },
             headers: {
-                'Accept': 'application/json',
-                'X-HockeyAppToken': options.hockeyappAPIKey
+                'X-API-Token': options.appCenterAPIKey
+            },
+            success: function (data) {
+                var parsedData = JSON.parse(data);
+
+                logger.info('commitAppCenterUpload: finished');
+                resolve(parsedData.release_url);
+            },
+            error: function (error) {
+                logger.error('Error when committing upload: %j', error);
+                reject(error);
             }
-        }, function (err, res) {
-            if (err) {
-                logger.error('Error when creating version: %j', err);
-                reject(err);
-            }
-
-            var body = '';
-
-            res.on('data', (chunk) => { body += chunk; });
-
-            res.on('end', () => {
-                var parsedData = JSON.parse(body);
-                logger.info('createHockeyAppVersion: finished');
-                resolve(parsedData.id);
-            });
         })
     );
 }
 
-function updateHockeyAppVersion (appId, versionId, filename, notes, teams) {
-    logger.info('updateHockeyAppVersion: start');
+function distributeAppCenterUpload (releaseUrl, team, notes) {
+    logger.info('distributeAppCenterUpload: start');
+    var url = `${options.appCenterHost}/${releaseUrl}`;
 
-    var readable = fs.createReadStream(filename);
-    readable.on('error', () => {
-        logger.info('Error reading binary file for upload to HockeyApp');
-    });
-
-    // HockeyApp properties
-    var HOCKEY_APP_PATH = '/api/2/apps/' + appId + '/app_versions/' + versionId;
-
-    // Create FormData
-    var form = new FormData();
-    form.append('notes', notes);
-    form.append('notes_type', 0);
-    form.append('status', 2);
-    form.append('ipa', readable);
-
-    if (teams) {
-        form.append('teams', teams);
-    }
+    var data = {
+        release_notes: notes,
+        destination_name: team
+    };
 
     return new Promise((resolve, reject) =>
-        form.submit({
-            host: options.hockeyAppHost,
-            path: HOCKEY_APP_PATH,
-            protocol: options.hockeyAppProtocol,
-            method: 'PUT',
+        najax({
+            url: url,
+            type: 'PATCH',
+            content_type: 'application/json',
+            data: data,
             headers: {
-                'Accept': 'application/json',
-                'X-HockeyAppToken': options.hockeyappAPIKey
-            }
-        }, function (err, res) {
-            if (err) {
-                logger.error('Error when uploading: %j', err);
-                reject(err);
-            }
+                'X-API-Token': options.appCenterAPIKey
+            },
+            success: function (data) {
+                var parsedData = JSON.parse(data);
 
-            if (res.statusCode !== 200 && res.statusCode !== 201) {
-                logger.error('Uploading failed with status ' + res.statusCode);
-                logger.error('res: %j', res);
-                reject(err);
+                logger.info('distributeAppCenterUpload: finished');
+                resolve(parsedData.release_url);
+            },
+            error: function (error) {
+                logger.error('Error when committing upload: %j', error);
+                reject(error);
             }
-
-            var jsonString = ''; // eslint-disable-line
-            res.on('data', (chunk) => {
-                jsonString += String.fromCharCode.apply(null, new Uint16Array(chunk));
-            });
-
-            res.on('end', () => {
-                logger.info('updateHockeyAppVersion: finished');
-                deleteFile(filename, resolve);
-            });
         })
     );
 }
 
-function uploadFileToHockeyApp (filename, notes, teams) {
-    logger.info('uploadToHockeyApp: start');
+function uploadFileToAppCenter (filename, uploadUrl) {
+    logger.info('uploadFileToAppCenter: start');
 
     var readable = fs.createReadStream(filename);
     readable.on('error', () => {
-        logger.error('Error reading binary file for upload to HockeyApp');
+        logger.error('Error reading binary file for upload to App Center');
     });
-
-    // HockeyApp properties
-    var HOCKEY_APP_PATH = '/api/2/apps/upload/';
 
     // Create FormData
     var form = new FormData();
-    form.append('status', 2);
-    form.append('notes', notes);
-    form.append('notes_type', 0);
     form.append('ipa', readable);
-
-    if (teams) {
-        form.append('teams', teams);
-    }
+    var parsedUrl = url.parse(uploadUrl);
 
     return new Promise((resolve, reject) => {
         var req = form.submit({
-            host: options.hockeyAppHost,
-            path: HOCKEY_APP_PATH,
-            protocol: options.hockeyAppProtocol,
+            host: parsedUrl.host,
+            path: parsedUrl.pathname + parsedUrl.search,
+            protocol: parsedUrl.protocol,
             headers: {
                 'Accept': 'application/json',
-                'X-HockeyAppToken': options.hockeyappAPIKey
+                'X-API-Token': options.appCenterAPIKey
             }
         }, function (err, res) {
             if (err) {
@@ -362,7 +317,7 @@ function uploadFileToHockeyApp (filename, notes, teams) {
                 reject(err);
             }
 
-            if (res.statusCode !== 200 && res.statusCode !== 201) {
+            if (res.statusCode !== 200 && res.statusCode !== 201 && res.statusCode !== 204) {
                 logger.info('Uploading failed with status ' + res.statusCode);
                 reject(err);
             }
@@ -373,7 +328,7 @@ function uploadFileToHockeyApp (filename, notes, teams) {
             });
 
             res.on('end', () => {
-                logger.info('uploadToHockeyApp: finished');
+                logger.info('uploadFileToAppCenter: finished');
 
                 deleteFile(filename, resolve);
             });
