@@ -2,10 +2,6 @@
 
 A NodeJS application to automate binary deployments from Unity Cloud Build to App Center.
 
-![Slack Screenshot](screenshot.jpg?raw=true "Screenshot of Unity Cloud Build and App Center activity within Slack when using this application.")
-
-Note; This is an initial release which is functional, but needs refactoring.
-
 ## App Flow
 
   1. Receive a webhook from Unity Cloud Build to notify a build is ready.
@@ -16,32 +12,30 @@ Note; This is an initial release which is functional, but needs refactoring.
 ## Requirements
 
 - Setup a [Unity Cloud Build](https://unity3d.com/services/cloud-build) account and project.
-- Setup a [App Center](https://App Center.net/) account. App Center will use the app package name to detemine which project to upload to.
+- Setup a [App Center](https://appcenter.ms) account.
+
+## Env variables
+
+## URL configuration
 
 ## Installation
 
-  1. Clone this repository.
+  1. Pull the Docker image
 
-  2. Add API keys to '.env' for both Unity Cloud Build and App Center.
+  2. Create API keys for both Unity Cloud Build and App Center.
     * UCB API key can be obtained [here](https://build.cloud.unity3d.com/preferences/).
-    * App Center API key can be created [here](https://rink.App Center.net/manage/auth_tokens). Be sure to create a key 'Upload' rights (e.g. anything above 'Read Only').
-
+    * App Center API key can be created [here](https://rink.App Center.net/manage/auth_tokens).
   3. Deploy.  
-    * Have only tested running on [Heroku](https://www.heroku.com/).
   4. Setup the Unity Cloud Build webhook.
     * Within UCB, view your app. Click 'Notifications', then 'Add New' and enter your app URL with '/build' appended. E.g. 'http://[appurl]/build/'
-    * Use a tool like [Request Bin](https://requestb.in/) to test web hooks from UCB, ontain the payload and test requests to '/build/'.
+    * Use a tool like [Request Bin](https://requestb.in/) to test web hooks from UCB, contain the payload and test requests to '/build/'.
 
 ## Notes
 
-- If you use Slack, integrate UCB and App Center to be notified when a new build is ready and has been pused to App Center. See screenshot above.
-- You don't need to setup the app on App Center, if you upload the binary it will automatically create a new app instance.
-- Configure App Center to automatically notify users after the binary has uploaded. See the 'notify' variable within the 'uploadToApp Center()' function. [App Center API](https://support.App Center.net/kb/api/api-versions#upload-version)
+- If you use Slack, integrate UCB and App Center to be notified when a new build is ready and has been pushed to App Center.
+- Configure App Center to automatically notify users after the binary has uploaded.
 
 ## Todo
-  - Clean up and comment codebase.
-  - Populate App Center release notes with Git commit message.
-  - Add logging feature to show builds processed and deployed.
   - Integrate job system to manage/prioritise jobs and view jobs in progress.
 
 ## Licenses
