@@ -305,7 +305,7 @@ function uploadFileToAppCenter (filename, uploadUrl) {
     return new Promise((resolve, reject) => {
         var req = form.submit({
             host: parsedUrl.host,
-            path: parsedUrl.pathname + parsedUrl.search,
+            path: parsedUrl.pathname + (parsedUrl.search ? parsedUrl.search : ''),
             protocol: parsedUrl.protocol,
             headers: {
                 'Accept': 'application/json',
