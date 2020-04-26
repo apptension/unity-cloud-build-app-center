@@ -37,11 +37,11 @@ required configuration in the URL query string.
 
   1. Pull the Docker image.
   2. Create API keys for both Unity Cloud Build and App Center.
-    * UCB API key can be obtained [here](https://build.cloud.unity3d.com/preferences/).
-    * App Center API key can be created [here](https://rink.App Center.net/manage/auth_tokens).
+     * UCB API key can be obtained [here](https://build.cloud.unity3d.com/preferences/).
+     * App Center API key can be created [here](https://appcenter.ms/settings/apitokens).
   3. Deploy the Docker image.  
   4. Setup the Unity Cloud Build webhook.
-    * Within UCB, view your app. Click 'Notifications', then 'Add New' and enter your app URL with '/build' appended. E.g. 'https://[appurl]/build/'
+     * Within UCB, view your app. Click 'Notifications', then 'Add New' and enter your app URL with '/build' appended. E.g. 'https://[appurl]/build/'
 
 ## Troubleshooting
 
