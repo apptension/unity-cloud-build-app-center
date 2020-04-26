@@ -238,7 +238,7 @@ function commitAppCenterUpload (ownerName, appName, uploadId) {
         najax({
             url: url,
             type: 'PATCH',
-            content_type: 'application/json',
+            contentType: 'application/json',
             data: { status: 'committed' },
             headers: {
                 'X-API-Token': options.appCenterAPIKey
@@ -270,7 +270,7 @@ function distributeAppCenterUpload (releaseUrl, team, notes) {
         najax({
             url: url,
             type: 'PATCH',
-            content_type: 'application/json',
+            contentType: 'application/json',
             data: data,
             headers: {
                 'X-API-Token': options.appCenterAPIKey
