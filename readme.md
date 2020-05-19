@@ -32,6 +32,8 @@ required configuration in the URL query string.
   - `team` - name of the team to distribute the app to on App Center
   - `excludeTargets` - comma-separated list of Unity Cloud Build targets that
   shouldn't be deployed to App Center
+  - `includeTargets` - comma-separated list of Unity Cloud Build targets that
+  should be deployed to App Center (targets not on this list will be excluded)
 
 ## Installation
 

@@ -107,6 +107,14 @@ app.post('/build', jsonParser, async function (req, res) {
         }
     }
 
+    if (req.query.includeTargets) {
+        var includedTargets = req.query.includeTargets.split(',').map((x) => x.trim());
+        if (!includedTargets.includes(req.body.buildTargetName)) {
+            logger.info('Target "%s" not included, skipping', req.body.buildTargetName);
+            return;
+        }
+    }
+
     var { url, filename, notes } = await getBuildDetails(buildAPIURL);
     var downloadedFilename = await downloadBinary(url, filename);
     await uploadToAppCenter(downloadedFilename, notes, req.body.platform, req.query.ownerName, req.query.appName, req.query.team);
